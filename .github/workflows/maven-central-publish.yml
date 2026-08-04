@@ -1,0 +1,106 @@
+# ============================================================
+# NapCat JNI SDK - 自动发布到 Sonatype Maven Central Portal
+# Namespace: io.github.cindifind
+# 触发条件：
+#   1. 推送 tag: v*   (例如 v1.0.0)
+#   2. Actions 页面手动 workflow_dispatch 触发（便于调试）
+# ============================================================
+name: Publish to Maven Central Portal
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Override version to publish (optional). Default = tag version.'
+        required: false
+        default: ''
+
+env:
+  JAVA_VERSION: '11'
+  JAVA_DISTRIBUTION: 'temurin'
+  MAVEN_ARGS: '-B -ntp --show-version'
+
+jobs:
+  publish:
+    name: Build, Sign & Publish to Central Portal
+    runs-on: ubuntu-latest
+    environment:
+      name: maven-central
+    # 如果在仓库级做 tag 保护，可确保仅受保护 tag 触发
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }} (${{ env.JAVA_DISTRIBUTION }})
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          # settings.xml 自动写入以下 serverId 凭据与 GPG 配置
+          server-id: central
+          server-username: CENTRAL_PORTAL_USERNAME
+          server-password: CENTRAL_PORTAL_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+          # cache
+          cache: maven
+
+      - name: Derive version from tag
+        id: version
+        shell: bash
+        run: |
+          if [[ -n "${{ github.event.inputs.release_version }}" ]]; then
+            VER="${{ github.event.inputs.release_version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VER="${GITHUB_REF#refs/tags/v}"
+          else
+            echo "No tag or manual version. Publish cannot continue."
+            exit 1
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: ${VER}"
+
+      - name: Override pom.xml version
+        working-directory: ${{ github.workspace }}
+        run: |
+          mvn $MAVEN_ARGS versions:set -DnewVersion="${{ steps.version.outputs.version }}" -DprocessAllModules=true -DgenerateBackupPoms=false
+
+      - name: Import GPG key (verify keyring is ready)
+        shell: bash
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          # 列 key，确认私钥已被 setup-java 注入
+          gpg --batch --list-secret-keys --keyid-format LONG || true
+
+      - name: Build, Javadoc, Sources, Sign & Publish to Central Portal
+        working-directory: ${{ github.workspace }}
+        env:
+          # Central Portal (central.sonatype.com) - 在 Account -> View Token 中生成
+          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+          # GPG 签名 passphrase（由 setup-java 使用环境变量名 gpg-passphrase 映射的 KEY 保持一致）
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          mvn $MAVEN_ARGS clean deploy \
+            -DskipTests \
+            -Dgpg.passphrase="${MAVEN_GPG_PASSPHRASE}" \
+            -Dcentral.username="${CENTRAL_PORTAL_USERNAME}" \
+            -Dcentral.password="${CENTRAL_PORTAL_PASSWORD}"
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: napcat-jni-sdk-build
+          path: |
+            target/*.jar
+            target/*.pom
+            target/*.asc
+          if-no-files-found: ignore

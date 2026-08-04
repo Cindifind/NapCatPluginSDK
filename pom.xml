@@ -48,35 +48,50 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <jackson.version>2.17.0</jackson.version>
         <!-- 签名插件需要：禁止读取 gpg.executable / passphrase 默认值 -->
         <gpg.skip>false</gpg.skip>
     </properties>
 
     <!-- ==================== 依赖 ==================== -->
     <dependencies>
+        <!-- jackson 三件套：手动指定每个模块版本（不再用统一属性管理）
+             原因：jackson-annotations 的版本号方案与 core/databind 不同（无补丁号）
+             CVE 修复：jackson-core 受影响 >=2.19.0 <2.21.1，2.22.1 满足修复要求
+             - jackson-core:       2.22.1 (2026-07-08, 2.22 线最新)
+             - jackson-databind:   2.22.1 (2026-07-08, 2.22 线最新)
+             - jackson-annotations: 2.22  (2026-05-31, 2.22 线最新, 无补丁号) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.22.1</version>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
+            <version>2.22.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.22</version>
         </dependency>
 
         <dependency>
             <groupId>org.jetbrains</groupId>
             <artifactId>annotations</artifactId>
-            <version>24.1.0</version>
+            <version>26.0.1</version>
             <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>2.0.13</version>
+            <version>2.0.18</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>2.0.13</version>
+            <version>2.0.18</version>
             <scope>runtime</scope>
         </dependency>
     </dependencies>

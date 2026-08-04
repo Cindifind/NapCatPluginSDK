@@ -253,15 +253,17 @@ public class PluginLoader {
     private ClassLoader createClassLoader(String pluginId) throws IOException {
         return classLoaders.computeIfAbsent(pluginId, id -> {
             try {
-                Path pluginPath;
+                Path pluginPath = null;
                 // 优先找同名 jar
                 File jarFile = new File(pluginDir, id + ".jar");
                 if (jarFile.isFile()) {
                     pluginPath = jarFile.toPath();
                 } else {
                     File dir = new File(pluginDir, id);
-                    if (dir.isDirectory()) pluginPath = dir.toPath();
-                    else {
+                    if (dir.isDirectory()) {
+                        pluginPath = dir.toPath();
+                    } else {
+                        // 遍历目录，根据 properties 中的 id 匹配实际文件
                         File[] entries = pluginDir.listFiles();
                         if (entries != null) {
                             for (File f : entries) {
@@ -276,7 +278,10 @@ public class PluginLoader {
                                 }
                             }
                         }
-                        pluginPath = jarFile.toPath();
+                        // 兜底：循环没匹配到，用同名 jar 路径（URLClassLoader 容忍不存在）
+                        if (pluginPath == null) {
+                            pluginPath = jarFile.toPath();
+                        }
                     }
                 }
                 List<URL> urls = new ArrayList<>();

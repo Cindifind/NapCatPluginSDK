@@ -27,9 +27,6 @@ jobs:
   publish:
     name: Build, Sign & Publish to Central Portal
     runs-on: ubuntu-latest
-    environment:
-      name: maven-central
-    # 如果在仓库级做 tag 保护，可确保仅受保护 tag 触发
     permissions:
       contents: read
 
@@ -42,13 +39,13 @@ jobs:
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
-          # settings.xml 自动写入以下 serverId 凭据与 GPG 配置
+          # settings.xml 自动写入 serverId=central 的凭据
           server-id: central
           server-username: CENTRAL_PORTAL_USERNAME
           server-password: CENTRAL_PORTAL_PASSWORD
+          # GPG 私钥与密码（必须是 secret 引用，不能是字符串）
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
-          # cache
+          gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
           cache: maven
 
       - name: Derive version from tag
@@ -67,34 +64,44 @@ jobs:
           echo "Publishing version: ${VER}"
 
       - name: Override pom.xml version
-        working-directory: ${{ github.workspace }}
         run: |
           mvn $MAVEN_ARGS versions:set -DnewVersion="${{ steps.version.outputs.version }}" -DprocessAllModules=true -DgenerateBackupPoms=false
 
-      - name: Import GPG key (verify keyring is ready)
+      - name: Verify GPG keyring (diagnostic)
         shell: bash
         env:
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+          GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         run: |
-          # 列 key，确认私钥已被 setup-java 注入
+          echo "=== Secret keys in keyring ==="
           gpg --batch --list-secret-keys --keyid-format LONG || true
+          echo ""
+          echo "=== Try signing a test payload ==="
+          echo "test" > /tmp/test.txt
+          if gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" \
+                 --detach-sign --armor /tmp/test.txt; then
+            echo "[OK] GPG signing works"
+            rm -f /tmp/test.txt /tmp/test.txt.asc
+          else
+            echo "[FAIL] GPG signing failed - passphrase may be wrong or key not imported"
+            exit 1
+          fi
+
+      - name: Show generated settings.xml (diagnostic)
+        run: |
+          echo "=== ~/.m2/settings.xml ==="
+          cat ~/.m2/settings.xml 2>/dev/null || echo "(not found)"
 
       - name: Build, Javadoc, Sources, Sign & Publish to Central Portal
-        working-directory: ${{ github.workspace }}
         env:
-          # Central Portal (central.sonatype.com) - 在 Account -> View Token 中生成
           CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
           CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
-          # GPG 签名 passphrase（由 setup-java 使用环境变量名 gpg-passphrase 映射的 KEY 保持一致）
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         run: |
           mvn $MAVEN_ARGS clean deploy \
             -DskipTests \
-            -Dgpg.passphrase="${MAVEN_GPG_PASSPHRASE}" \
-            -Dcentral.username="${CENTRAL_PORTAL_USERNAME}" \
-            -Dcentral.password="${CENTRAL_PORTAL_PASSWORD}"
+            -Dgpg.passphrase="${MAVEN_GPG_PASSPHRASE}"
 
-      - name: Upload build artifacts
+      - name: Upload build artifacts (on success or failure)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -103,4 +110,14 @@ jobs:
             target/*.jar
             target/*.pom
             target/*.asc
+          if-no-files-found: ignore
+
+      - name: Upload Maven logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-logs
+          path: |
+            **/target/surefire-reports/**
+            ~/.m2/repository/io/github/cindifind/**/maven-metadata-*.xml
           if-no-files-found: ignore

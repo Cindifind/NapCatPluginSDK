@@ -168,12 +168,16 @@
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
-                <version>0.7.0</version>
+                <version>0.9.0</version>
                 <extensions>true</extensions>
                 <configuration>
                     <!-- 生成后自动发布到 Central（校验通过即出现在中央库） -->
                     <publishingType>AUTOMATIC</publishingType>
-                    <!-- 0.7.0 起支持新 API 响应中的 warnings 字段 -->
+                    <!-- 跳过发布后状态轮询：Sonatype 后端新加了 warnings 字段，
+                         旧版 DeploymentApiResponse 模型无法识别会导致反序列化失败。
+                         上传+publish 请求成功后即视为构建通过，状态可在
+                         https://central.sonatype.com/publishing/deployments 查看 -->
+                    <waitUntilDeployed>false</waitUntilDeployed>
                 </configuration>
             </plugin>
         </plugins>

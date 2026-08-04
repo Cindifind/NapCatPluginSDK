@@ -168,11 +168,12 @@
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
-                <version>0.5.0</version>
+                <version>0.7.0</version>
                 <extensions>true</extensions>
                 <configuration>
                     <!-- 生成后自动发布到 Central（校验通过即出现在中央库） -->
                     <publishingType>AUTOMATIC</publishingType>
+                    <!-- 0.7.0 起支持新 API 响应中的 warnings 字段 -->
                 </configuration>
             </plugin>
         </plugins>

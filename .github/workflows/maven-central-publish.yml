@@ -97,9 +97,18 @@ jobs:
           CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         run: |
+          # 将完整输出保存到文件，便于失败时上传 artifact
+          set +e
           mvn $MAVEN_ARGS clean deploy \
             -DskipTests \
-            -Dgpg.passphrase="${MAVEN_GPG_PASSPHRASE}"
+            -Dgpg.passphrase="${MAVEN_GPG_PASSPHRASE}" \
+            -e 2>&1 | tee /tmp/mvn-deploy.log
+          MVN_EXIT=${PIPESTATUS[0]}
+          echo "Maven exit code: ${MVN_EXIT}"
+          # 复制日志到 target 便于上传
+          mkdir -p target
+          cp /tmp/mvn-deploy.log target/mvn-deploy.log
+          exit ${MVN_EXIT}
 
       - name: Upload build artifacts (on success or failure)
         if: always()
@@ -110,14 +119,5 @@ jobs:
             target/*.jar
             target/*.pom
             target/*.asc
-          if-no-files-found: ignore
-
-      - name: Upload Maven logs (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: maven-logs
-          path: |
-            **/target/surefire-reports/**
-            ~/.m2/repository/io/github/cindifind/**/maven-metadata-*.xml
+            target/mvn-deploy.log
           if-no-files-found: ignore

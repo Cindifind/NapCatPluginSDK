@@ -38,7 +38,7 @@ public class Main {
     private static final Logger LOG = LoggerFactory.getLogger(Main.class);
     public static final ObjectMapper MAPPER = new ObjectMapper();
 
-    public static final String SDK_VERSION = "1.0.2";
+    public static final String SDK_VERSION = "1.0.3";
 
     private static NapCatBridge bridge;
     private static PluginLoader pluginLoader;

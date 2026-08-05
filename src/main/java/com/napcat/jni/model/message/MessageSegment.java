@@ -1,5 +1,7 @@
 package com.napcat.jni.model.message;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.napcat.jni.util.Kv;
 
 import java.util.LinkedHashMap;
@@ -14,6 +16,10 @@ import java.util.Map;
  *   MessageSegment text = MessageSegment.text("你好");
  *   MessageSegment at = MessageSegment.at("123456");
  * }</pre>
+ * <p>
+ * 反序列化支持：通过 {@link #MessageSegment(String, Map)} 构造器上的
+ * {@link JsonCreator} 注解，Jackson 可从 OneBot 11 原始格式
+ * {@code {"type":"text","data":{"text":"..."}}} 还原对象。
  */
 public class MessageSegment {
 
@@ -25,7 +31,16 @@ public class MessageSegment {
         this.data = new LinkedHashMap<>();
     }
 
-    public MessageSegment(String type, Map<String, Object> data) {
+    /**
+     * Jackson 反序列化主构造器。
+     * <p>
+     * 注：不可在此构造器外再加 {@code @JsonCreator} 的单参数构造器，
+     * 否则会触发 "multiple creators" 异常。单参数构造器仅供业务代码使用。
+     */
+    @JsonCreator
+    public MessageSegment(
+            @JsonProperty("type") String type,
+            @JsonProperty("data") Map<String, Object> data) {
         this.type = type;
         this.data = data != null ? new LinkedHashMap<>(data) : new LinkedHashMap<>();
     }
